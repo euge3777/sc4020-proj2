@@ -3,10 +3,13 @@ from sklearn.model_selection import cross_val_score
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import classification_report, confusion_matrix
 import numpy as np
+from pattern_mining import SequentialPatternMiner
 
 class SensitivityAnalyzer:
-    def __init__(self):
+    def __init__(self, min_support=0.15, max_pattern_length=5):
         self.results = {}
+        self.min_support = min_support
+        self.max_pattern_length = max_pattern_length
     
     def analyze_binning_methods(self):
         """Compare performance across different binning methods"""
@@ -26,36 +29,48 @@ class SensitivityAnalyzer:
         return self.results
     
     def _analyze_patterns(self, df, method_name):
-        """Analyze patterns in sequence data"""
+        """Analyze sequential patterns using GSP algorithm"""
+        # Mine sequential patterns using GSP
+        miner = SequentialPatternMiner(
+            min_support=self.min_support,
+            max_pattern_length=self.max_pattern_length
+        )
+        
+        patterns = miner.mine_patterns(
+            df['sequence'].tolist(),
+            df['diagnosis'].tolist()
+        )
+        
+        # Extract top patterns for each class
+        malignant_patterns = patterns['Malignant']['sequential_patterns']
+        benign_patterns = patterns['Benign']['sequential_patterns']
+        
+        # Sort by length and support
+        malignant_sorted = sorted(
+            malignant_patterns.items(),
+            key=lambda x: (len(x[0]), x[1]),
+            reverse=True
+        )[:15]
+        
+        benign_sorted = sorted(
+            benign_patterns.items(),
+            key=lambda x: (len(x[0]), x[1]),
+            reverse=True
+        )[:15]
+        
         results = {
             'method': method_name,
             'total_sequences': len(df),
             'avg_sequence_length': df['sequence_length'].mean(),
-            'malignant_patterns': self._extract_common_patterns(
-                df[df['diagnosis'] == 'Malignant']
-            ),
-            'benign_patterns': self._extract_common_patterns(
-                df[df['diagnosis'] == 'Benign']
-            )
+            'malignant_patterns': malignant_sorted,
+            'benign_patterns': benign_sorted,
+            'malignant_max_length': patterns['Malignant']['max_length'],
+            'benign_max_length': patterns['Benign']['max_length'],
+            'malignant_total_patterns': len(malignant_patterns),
+            'benign_total_patterns': len(benign_patterns)
         }
         
         return results
-    
-    def _extract_common_patterns(self, df):
-        """Extract most common patterns from sequences"""
-        # Count individual features
-        feature_counts = {}
-        for sequence in df['sequence']:
-            if pd.isna(sequence):  # Handle empty sequences
-                continue
-            features = sequence.split()
-            for feature in features:
-                feature_counts[feature] = feature_counts.get(feature, 0) + 1
-        
-        # Return top 10 most common features
-        sorted_features = sorted(feature_counts.items(), 
-                               key=lambda x: x[1], reverse=True)
-        return sorted_features[:10]
     
     def validate_biological_relevance(self):
         """Validate that patterns align with known cancer biology"""
@@ -94,51 +109,54 @@ class SensitivityAnalyzer:
         return validation_results
 
     def compare_classification_performance(self):
-        """Compare classification performance across different binning methods"""
-        from collections import Counter
-        
+        """Compare classification performance using GSP-based pattern features"""
         performance_results = {}
         
         for method in ['quantile', 'uniform', 'kmeans']:
             try:
                 df = pd.read_csv(f'data/Cancer_Data_sequences_{method}.csv')
                 
-                # Create simple features from sequences
-                feature_vectors = []
-                labels = []
+                # Mine patterns using GSP
+                miner = SequentialPatternMiner(
+                    min_support=self.min_support,
+                    max_pattern_length=self.max_pattern_length
+                )
                 
-                # Extract unique features across all sequences
-                all_features = set()
-                for sequence in df['sequence']:
-                    if pd.notna(sequence):
-                        all_features.update(sequence.split())
+                patterns = miner.mine_patterns(
+                    df['sequence'].tolist(),
+                    df['diagnosis'].tolist()
+                )
                 
-                all_features = sorted(list(all_features))
+                # Generate pattern-based features
+                feature_vectors = miner.generate_pattern_features(df['sequence'].tolist())
                 
-                # Convert sequences to binary feature vectors
-                for idx, row in df.iterrows():
-                    sequence = row['sequence']
-                    if pd.isna(sequence):
-                        continue
-                        
-                    features = sequence.split()
-                    vector = [1 if feature in features else 0 for feature in all_features]
-                    feature_vectors.append(vector)
-                    labels.append(1 if row['diagnosis'] == 'Malignant' else 0)
-                
-                if len(feature_vectors) > 10:  # Ensure we have enough samples
-                    X = np.array(feature_vectors)
-                    y = np.array(labels)
+                if feature_vectors:
+                    # Convert to array
+                    feature_df = pd.DataFrame(feature_vectors)
+                    X = feature_df.values
+                    y = df['diagnosis'].map({'Malignant': 1, 'Benign': 0}).values
                     
-                    # Cross-validation
-                    clf = RandomForestClassifier(n_estimators=50, random_state=42)
+                    # Cross-validation with pattern features
+                    clf = RandomForestClassifier(n_estimators=100, random_state=42)
                     cv_scores = cross_val_score(clf, X, y, cv=5, scoring='accuracy')
+                    
+                    # Calculate pattern statistics
+                    malignant_patterns = patterns['Malignant']['sequential_patterns']
+                    benign_patterns = patterns['Benign']['sequential_patterns']
+                    
+                    # Longest patterns
+                    longest_malignant = max([len(p) for p in malignant_patterns.keys()]) if malignant_patterns else 0
+                    longest_benign = max([len(p) for p in benign_patterns.keys()]) if benign_patterns else 0
                     
                     performance_results[method] = {
                         'mean_cv_accuracy': cv_scores.mean(),
                         'std_cv_accuracy': cv_scores.std(),
-                        'n_features': len(all_features),
-                        'n_samples': len(feature_vectors)
+                        'n_pattern_features': X.shape[1],
+                        'n_samples': len(feature_vectors),
+                        'malignant_patterns_count': len(malignant_patterns),
+                        'benign_patterns_count': len(benign_patterns),
+                        'longest_malignant_pattern': longest_malignant,
+                        'longest_benign_pattern': longest_benign
                     }
                 
             except FileNotFoundError:
@@ -217,15 +235,28 @@ def compare_methods():
     pattern_results = analyzer.analyze_binning_methods()
     
     for method, results in pattern_results.items():
+        print(f"\n{'='*60}")
         print(f"Method: {method.upper()}")
+        print(f"{'='*60}")
         print(f"  Total sequences: {results['total_sequences']}")
         print(f"  Avg sequence length: {results['avg_sequence_length']:.2f}")
-        print(f"  Top malignant patterns:")
-        for feature, count in results['malignant_patterns'][:5]:
-            print(f"    {feature}: {count}")
-        print(f"  Top benign patterns:")
-        for feature, count in results['benign_patterns'][:3]:
-            print(f"    {feature}: {count}")
+        print(f"  Total patterns found:")
+        print(f"    Malignant: {results['malignant_total_patterns']} (max length: {results['malignant_max_length']})")
+        print(f"    Benign: {results['benign_total_patterns']} (max length: {results['benign_max_length']})")
+        
+        print(f"\n  Top 5 Malignant Sequential Patterns:")
+        for pattern, count in results['malignant_patterns'][:5]:
+            pattern_str = ' → '.join(pattern)
+            support = count / results['total_sequences']
+            print(f"    [{len(pattern)}] {pattern_str}")
+            print(f"        Support: {count} ({support:.2%})")
+        
+        print(f"\n  Top 5 Benign Sequential Patterns:")
+        for pattern, count in results['benign_patterns'][:5]:
+            pattern_str = ' → '.join(pattern)
+            support = count / results['total_sequences']
+            print(f"    [{len(pattern)}] {pattern_str}")
+            print(f"        Support: {count} ({support:.2%})")
         print()
     
     # Biological relevance validation
@@ -242,8 +273,11 @@ def compare_methods():
     for method, results in performance_results.items():
         print(f"{method.capitalize()}:")
         print(f"  CV Accuracy: {results['mean_cv_accuracy']:.3f} (±{results['std_cv_accuracy']:.3f})")
-        print(f"  Features: {results['n_features']}")
+        print(f"  Pattern Features: {results['n_pattern_features']}")
         print(f"  Samples: {results['n_samples']}")
+        print(f"  Patterns Discovered:")
+        print(f"    Malignant: {results['malignant_patterns_count']} (longest: {results['longest_malignant_pattern']})")
+        print(f"    Benign: {results['benign_patterns_count']} (longest: {results['longest_benign_pattern']})")
         print()
     
     # Sequence diversity analysis
