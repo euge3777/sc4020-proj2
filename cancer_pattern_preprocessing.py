@@ -1,17 +1,3 @@
-"""
-Cancer Feature Pattern Mining - Data Preprocessing
-SC4020 Assignment 2 - Task 2.2
-
-This script transforms numerical features from the breast cancer dataset into categorical sequences
-for sequential pattern mining (e.g., GSP algorithm).
-
-Sequence Semantics:
-- Rank features per patient by z-score (standardized feature importance)
-- Select top-k features as ordered itemsets
-- Maximum sequence length: L
-- Max-gap = 1 (allowing same-order ties to form a single itemset)
-"""
-
 import pandas as pd
 import numpy as np
 from sklearn.preprocessing import KBinsDiscretizer, StandardScaler
@@ -20,16 +6,10 @@ import warnings
 warnings.filterwarnings('ignore')
 
 class CancerSequencePreprocessor:
-    """
-    Preprocessor for transforming cancer data into sequential patterns.
-    """
-    
     def __init__(self, data_path, top_k=5, max_seq_length=5, 
                  binning_strategy='quantile', n_bins=3, 
                  feature_types=['mean', 'se', 'worst']):
-        """
-        Initialize the preprocessor.
-        
+        """   
         Parameters:
         -----------
         data_path : str
@@ -69,7 +49,6 @@ class CancerSequencePreprocessor:
         self.sequences = None
         
     def load_data(self):
-        """Load and prepare the cancer dataset."""
         print("="*80)
         print("STEP 1: Loading Cancer Data")
         print("="*80)
@@ -118,7 +97,6 @@ class CancerSequencePreprocessor:
         return self
     
     def standardize_features(self):
-        """Standardize features using z-score normalization."""
         print("="*80)
         print("STEP 2: Z-Score Standardization")
         print("="*80)
@@ -133,10 +111,6 @@ class CancerSequencePreprocessor:
         return self
     
     def calculate_feature_importance(self):
-        """
-        Calculate feature importance using mutual information w.r.t. diagnosis.
-        Also provides z-score based ranking per patient.
-        """
         print("="*80)
         print("STEP 3: Feature Importance Calculation")
         print("="*80)
@@ -157,10 +131,6 @@ class CancerSequencePreprocessor:
         return self
     
     def discretize_features(self):
-        """
-        Discretize continuous features into categorical bins.
-        Uses KBinsDiscretizer with the specified strategy.
-        """
         print("="*80)
         print(f"STEP 4: Feature Discretization ({self.binning_strategy} strategy)")
         print("="*80)
@@ -198,7 +168,6 @@ class CancerSequencePreprocessor:
         return self
     
     def _get_bin_label(self, bin_idx):
-        """Get human-readable label for bin index."""
         if self.n_bins == 3:
             return ['low', 'medium', 'high'][bin_idx]
         elif self.n_bins == 5:
@@ -207,16 +176,6 @@ class CancerSequencePreprocessor:
             return f'bin_{bin_idx}'
     
     def create_sequences(self):
-        """
-        Create sequential patterns for each patient.
-        
-        For each patient:
-        1. Rank features by their z-score (absolute value)
-        2. Select top-k features
-        3. Order them by z-score rank
-        4. Create sequence with discretized values
-        5. Group features with same rank (ties) into single itemset
-        """
         print("="*80)
         print("STEP 5: Sequential Pattern Creation")
         print("="*80)
@@ -276,7 +235,6 @@ class CancerSequencePreprocessor:
         return self
     
     def display_sample_sequences(self, n_malignant=5, n_benign=5):
-        """Display sample sequences for inspection."""
         print("="*80)
         print("STEP 6: Sample Sequences")
         print("="*80)
@@ -302,7 +260,6 @@ class CancerSequencePreprocessor:
         print("\n")
         
     def save_sequences(self, output_path=None, suffix=None):
-        """Save sequences to CSV file for sequential pattern mining."""
         if output_path is None:
             if suffix:
                 output_path = self.data_path.replace('.csv', f'_sequences_{suffix}.csv')
@@ -334,7 +291,6 @@ class CancerSequencePreprocessor:
         return output_path
     
     def get_statistics(self):
-        """Generate preprocessing statistics for reporting."""
         print("="*80)
         print("PREPROCESSING STATISTICS")
         print("="*80)
@@ -384,16 +340,6 @@ class CancerSequencePreprocessor:
 
 
 def sensitivity_analysis_binning_strategies(feature_types=['mean', 'se', 'worst']):
-    """
-    Perform sensitivity analysis across different binning strategies.
-    This addresses the tip: "Use KBinsDiscretizer and report a sensitivity check 
-    across binning strategies."
-    
-    Parameters:
-    -----------
-    feature_types : list of str
-        Types of features to include: 'mean', 'se', and/or 'worst' (default: all three)
-    """
     print("\n" + "="*80)
     print("SENSITIVITY ANALYSIS: Binning Strategies")
     print(f"Feature types: {', '.join(feature_types)}")
@@ -458,16 +404,6 @@ if __name__ == "__main__":
     print("SC4020 Assignment 2 - Task 2.2")
     print("="*80 + "\n")
     
-    # Example 1: Use only 'mean' features
-    # results = sensitivity_analysis_binning_strategies(feature_types=['mean'])
-    
-    # Example 2: Use 'mean' and 'worst' features
-    # results = sensitivity_analysis_binning_strategies(feature_types=['mean', 'worst'])
-    
-    # Example 3: Use only 'se' features
-    # results = sensitivity_analysis_binning_strategies(feature_types=['se'])
-    
-    # Default: Run sensitivity analysis with all feature types (mean, se, worst)
     results = sensitivity_analysis_binning_strategies(feature_types=['mean'])
     
     print("="*80)

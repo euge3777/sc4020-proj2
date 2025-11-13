@@ -5,15 +5,12 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import classification_report
 
 class SequentialPatternMiner:
-    def __init__(self, min_support=0.1, max_pattern_length=5, max_gap=1):
+    def __init__(self, min_support=0.1, max_pattern_length=5):
         self.min_support = min_support
         self.max_pattern_length = max_pattern_length
-        self.max_gap = max_gap
         self.patterns = {}
     
     def mine_patterns(self, sequences, diagnosis_labels):
-        """Mine sequential patterns for each diagnosis class using GSP algorithm"""
-        
         # Separate by diagnosis
         malignant_sequences = [seq for seq, diag in zip(sequences, diagnosis_labels) 
                              if diag == 'Malignant']
@@ -31,7 +28,7 @@ class SequentialPatternMiner:
     def _gsp_mine(self, sequences):
         """
         Generalized Sequential Pattern (GSP) algorithm
-        Following the strict pseudo code with max_gap=1 constraint
+        Following the strict pseudo code
         """
         # Convert sequences to list of features
         feature_sequences = [seq.split() for seq in sequences]
@@ -76,7 +73,7 @@ class SequentialPatternMiner:
             candidate_counts = Counter()
             for seq in feature_sequences:
                 for candidate in candidates:
-                    if self._is_subsequence_with_gap(candidate, seq, max_gap=self.max_gap):
+                    if self._is_subsequence(candidate, seq):
                         candidate_counts[candidate] += 1
             
             # Candidate Elimination: Eliminate candidate k-sequences whose actual 
@@ -102,10 +99,6 @@ class SequentialPatternMiner:
         }
     
     def _generate_candidates(self, frequent_patterns):
-        """
-        Generate candidate (k+1)-sequences from frequent k-sequences
-        Following GSP join step: merge sequences with matching (k-1) prefix/suffix
-        """
         candidates = set()
         pattern_list = list(frequent_patterns.keys())
         
@@ -126,10 +119,6 @@ class SequentialPatternMiner:
         return candidates
     
     def _prune_candidates(self, candidates, frequent_k_minus_1):
-        """
-        Candidate Pruning using Apriori property:
-        Prune candidate k-sequences that contain infrequent (k-1)-subsequences
-        """
         pruned_candidates = set()
         
         for candidate in candidates:
@@ -150,10 +139,6 @@ class SequentialPatternMiner:
         return pruned_candidates
     
     def _is_subsequence(self, pattern, sequence):
-        """
-        Check if pattern is a subsequence of sequence (maintains order)
-        Used for feature generation (no gap constraint)
-        """
         pattern_idx = 0
         for item in sequence:
             if pattern_idx < len(pattern) and item == pattern[pattern_idx]:
@@ -162,44 +147,7 @@ class SequentialPatternMiner:
                     return True
         return pattern_idx == len(pattern)
     
-    def _is_subsequence_with_gap(self, pattern, sequence, max_gap=1):
-        """
-        Check if pattern is a subsequence of sequence with max_gap constraint
-        max_gap: maximum number of items allowed between consecutive pattern elements
-        max_gap=1 means pattern elements must be adjacent or have at most 1 item between them
-        """
-        if not pattern:
-            return True
-        if len(pattern) > len(sequence):
-            return False
-        
-        # Use dynamic programming to find if pattern exists with gap constraint
-        def find_pattern(pattern_idx, seq_idx):
-            # Base case: all pattern elements matched
-            if pattern_idx >= len(pattern):
-                return True
-            
-            # Base case: not enough sequence left
-            if seq_idx >= len(sequence):
-                return False
-            
-            # Try to match current pattern element at different positions
-            for i in range(seq_idx, min(seq_idx + max_gap + 2, len(sequence))):
-                if sequence[i] == pattern[pattern_idx]:
-                    # If this is the last pattern element, we found it
-                    if pattern_idx == len(pattern) - 1:
-                        return True
-                    # Otherwise, continue matching next pattern element
-                    # Next element must be within max_gap+1 positions
-                    if find_pattern(pattern_idx + 1, i + 1):
-                        return True
-            
-            return False
-        
-        return find_pattern(0, 0)
-    
     def generate_pattern_features(self, sequences):
-        """Generate binary features based on discovered sequential patterns"""
         feature_vectors = []
         
         # Collect all unique sequential patterns from both classes
@@ -221,18 +169,14 @@ class SequentialPatternMiner:
         
         return feature_vectors
 
-def run_pattern_mining_analysis(min_support=0.15, max_pattern_length=5, max_gap=1, top_k=15):
+def run_pattern_mining_analysis(min_support=0.15, max_pattern_length=5, top_k=15):
     """
-    Run complete pattern mining analysis on all three methods using GSP
-    
     Parameters:
     -----------
     min_support : float
         Minimum support threshold (default: 0.15)
     max_pattern_length : int
         Maximum length of sequential patterns to mine (default: 5)
-    max_gap : int
-        Maximum gap allowed between consecutive pattern elements (default: 1)
     top_k : int
         Number of top patterns to display for each class (default: 15)
     """
@@ -245,7 +189,6 @@ def run_pattern_mining_analysis(min_support=0.15, max_pattern_length=5, max_gap=
     print(f"GSP Configuration:")
     print(f"  Min Support: {min_support}")
     print(f"  Max Pattern Length: {max_pattern_length}")
-    print(f"  Max Gap: {max_gap}")
     print(f"  Top-K Patterns Shown: {top_k}")
     print(f"{'='*70}")
     
@@ -260,8 +203,7 @@ def run_pattern_mining_analysis(min_support=0.15, max_pattern_length=5, max_gap=
         # Mine patterns using GSP
         miner = SequentialPatternMiner(
             min_support=min_support, 
-            max_pattern_length=max_pattern_length,
-            max_gap=max_gap
+            max_pattern_length=max_pattern_length
         )
         patterns = miner.mine_patterns(df['sequence'].tolist(), 
                                      df['diagnosis'].tolist())
@@ -326,10 +268,8 @@ def run_pattern_mining_analysis(min_support=0.15, max_pattern_length=5, max_gap=
     return results
 
 if __name__ == "__main__":
-    # You can customize these parameters:
     results = run_pattern_mining_analysis(
         min_support=0.15,        # Minimum support threshold
         max_pattern_length=5,    # Maximum length of patterns
-        max_gap=1,              # Maximum gap between consecutive elements
         top_k=15                # Number of top patterns to display
     )

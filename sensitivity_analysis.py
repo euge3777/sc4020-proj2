@@ -12,7 +12,6 @@ class SensitivityAnalyzer:
         self.max_pattern_length = max_pattern_length
     
     def analyze_binning_methods(self):
-        """Compare performance across different binning methods"""
         methods = ['quantile', 'uniform', 'kmeans']
         
         for method in methods:
@@ -29,7 +28,6 @@ class SensitivityAnalyzer:
         return self.results
     
     def _analyze_patterns(self, df, method_name):
-        """Analyze sequential patterns using GSP algorithm"""
         # Mine sequential patterns using GSP
         miner = SequentialPatternMiner(
             min_support=self.min_support,
@@ -73,7 +71,6 @@ class SensitivityAnalyzer:
         return results
     
     def validate_biological_relevance(self):
-        """Validate that patterns align with known cancer biology"""
         validation_results = {}
         
         # Known important cancer biomarkers
@@ -109,7 +106,6 @@ class SensitivityAnalyzer:
         return validation_results
 
     def compare_classification_performance(self):
-        """Compare classification performance using GSP-based pattern features"""
         performance_results = {}
         
         for method in ['quantile', 'uniform', 'kmeans']:
@@ -169,7 +165,6 @@ class SensitivityAnalyzer:
         return performance_results
 
     def analyze_sequence_diversity(self):
-        """Analyze diversity of sequences across methods"""
         diversity_results = {}
         
         for method in ['quantile', 'uniform', 'kmeans']:
